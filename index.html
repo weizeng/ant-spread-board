@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANT Spread Board · Anthropic 盘前合约价差看板</title>
+<meta name="description" content="只读看板：把 OKX、Hyperliquid、Binance 的 Anthropic (ANT) 盘前合约换算成每股价格并比较价差。">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <h1>ANT Spread Board</h1>
+    <p class="sub">Anthropic 盘前合约 · 每股隐含价格与跨平台价差(spread)</p>
+    <p id="statusLine" class="statusline" role="status" aria-live="polite">正在加载…</p>
+    <p class="note-top">只读看板:不交易、不下单、无账户。<strong>DYOR,非投资建议。</strong></p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="card controls" aria-label="控制面板">
+    <fieldset class="scenario">
+      <legend>份额情景 Share-count scenario</legend>
+      <label><input type="radio" name="scenario" value="12.3"> 12.3B</label>
+      <label><input type="radio" name="scenario" value="12.7" checked> 12.7B(默认)</label>
+      <label><input type="radio" name="scenario" value="13.1"> 13.1B</label>
+    </fieldset>
+    <div class="actions">
+      <button id="refreshBtn" type="button" class="btn primary">刷新 Refresh</button>
+      <button id="sampleBtn" type="button" class="btn">加载示例数据</button>
+      <button id="liveBtn" type="button" class="btn" hidden>返回实时数据</button>
+    </div>
+    <p class="meta">最后更新 Last updated:<span id="lastUpdated">—</span> · 每 30 秒自动刷新</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-table">
+    <h2 id="h-table">价差表 Spread table</h2>
+    <div id="sampleBanner" class="banner" hidden>示例数据,非实时 — 以下所有数字来自 2026-11-04 09:59(北京时间)的旧快照,仅供演示。</div>
+    <div class="table-scroll">
+      <table id="spreadTable">
+        <thead>
+          <tr>
+            <th>市场 Market</th>
+            <th>报价 Quoted</th>
+            <th>假设份额 Shares</th>
+            <th>每股隐含价 Per-share</th>
+            <th>价差 vs xyz ($)</th>
+            <th>价差 vs xyz (%)</th>
+            <th>资金费率 Funding(原始值)</th>
+            <th>来源状态 Status</th>
+          </tr>
+        </thead>
+        <tbody id="spreadBody"></tbody>
+      </table>
+    </div>
+
+    <div class="binance-box">
+      <h3>Binance 手动输入</h3>
+      <p class="small">本应用不请求 Binance(构建环境访问被限制)。如需对比,请自行输入你在 Binance 看到的报价(按每 1B 股报价的合约)。该数值只保存在当前页面内存中,刷新页面即清除。</p>
+      <form id="binanceForm" class="inline-form">
+        <label for="binanceInput" class="sr">Binance 价格</label>
+        <input id="binanceInput" type="number" step="any" min="0" inputmode="decimal" placeholder="例如 1647.26">
+        <button type="submit" class="btn">使用此价格 Use this price</button>
+        <button type="button" id="binanceClear" class="btn ghost">清除</button>
+      </form>
+    </div>
+
+    <p class="small formulas" id="formulaNote"></p>
+    <p class="disclaimer-inline">DYOR:本表不是投资建议,不执行交易,不下任何订单。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-chart">
+    <h2 id="h-chart">历史图表 History</h2>
+    <div class="chart-controls">
+      <label>显示 <select id="chartMode">
+        <option value="price">xyz:ANT 每股价格 ($)</option>
+        <option value="spread">价差 vs xyz (%)</option>
+      </select></label>
+      <button id="clearHistory" type="button" class="btn ghost">清除历史</button>
+    </div>
+    <canvas id="chart" width="800" height="300" aria-label="历史折线图" role="img"></canvas>
+    <p class="small" id="chartNote"></p>
+    <p class="small">历史仅保存在你浏览器的 localStorage 中,每个来源最多 50 个点,示例数据不会写入。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-rebase">
+    <h2 id="h-rebase">为什么要"重基准"? Rebase explainer</h2>
+    <p class="label-author">以下是作者的理解,不是经过验证的数据。</p>
+    <p>盘前合约的报价单位各不相同:有的合约代表 1 股,有的代表 10B(100 亿)股的"一份",有的代表 1B 股的"一份",还有的是按总市值报价。要比较它们,必须知道公司到底有多少股,而 IPO 之前这个数字并不确定。</p>
+    <p>所以交易所只能先用一个估计的总股数做换算。等公司在招股文件中披露真实股数后,交易所可能把合约"重基准(rebase)":把报价调整到与真实每股价格一致。重基准之后,原先因为股数假设不同而产生的价差,理论上会消失或明显收窄。</p>
+    <h3>为什么有三个情景</h3>
+    <p>本看板用 12.3B、12.7B、13.1B 三个总股数假设。约 12.7B 的含义是:约 12.3B 已发行股份,加上约 0.4B 的新 IPO 股份。这个数字不包含期权、未归属 RSU、预留股份、绿鞋(greenshoe)超额配售,以及超过 12% 上限部分的 Amazon 可转债。股数越大,同一份 OKX/Binance 报价换算出的每股价格越低,所以三个情景给出的是一个区间,而不是一个确定答案。</p>
+    <p>io:ANTH(Entropy)按约 167B 完全稀释股数(价格 ÷ 16.7)换算,与上面的情景选择无关。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-spacex">
+    <h2 id="h-spacex">SpaceX 先例 Precedent</h2>
+    <p class="label-author">同样是作者的转述,未经本应用验证。</p>
+    <p>据作者所述,在 SpaceX 的类似情形中,OKX 当时采用的总股数是 12.52B,Binance 采用的是 13.08B。两家用的股数不同,所以重基准之前报价之间有价差;重基准之后,价差收敛了。这是本页面把"价差可能随股数披露而收敛"当作一个值得观察的现象的原因,并不保证 ANT 会重演同样结果。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-sources">
+    <h2 id="h-sources">数据来源 Data sources</h2>
+    <ul id="sourceList" class="sources">
+      <li><strong>OKX 行情</strong>:<code>GET https://www.okx.com/api/v5/market/ticker?instId=ANTHROPIC-USDT-SWAP</code>(使用 last、bidPx、askPx、ts)</li>
+      <li><strong>OKX 资金费率</strong>:<code>GET https://www.okx.com/api/v5/public/funding-rate?instId=ANTHROPIC-USDT-SWAP</code>(fundingRate)</li>
+      <li><strong>Hyperliquid xyz</strong>:<code>POST https://api.hyperliquid.xyz/info</code> body <code>{"type":"metaAndAssetCtxs","dex":"xyz"}</code>,条目 <code>xyz:ANT</code></li>
+      <li><strong>Hyperliquid io</strong>:<code>POST https://api.hyperliquid.xyz/info</code> body <code>{"type":"metaAndAssetCtxs","dex":"io"}</code>,条目 <code>io:ANTH</code></li>
+      <li><strong>Binance</strong>:不请求;仅手动输入。</li>
+    </ul>
+    <p class="small">所有数字旁标注来源与获取时间(UTC)。资金费率显示 API 原始值,未年化,因为各平台的结算周期尚未核实。换算使用中间价 (mid);标记价 (mark) 仅供参考。</p>
+  </section>
+
+  <section class="card disclaimer" aria-labelledby="h-disc">
+    <h2 id="h-disc">免责声明 Disclaimer</h2>
+    <p>DYOR(自行研究)。本页面仅展示公开市场数据与基于假设的换算,<strong>不构成投资建议</strong>。本应用不执行交易、不下单、不连接钱包、不需要登录或 API 密钥。数据可能延迟、错误或缺失;任何来源失败时页面会如实显示,而不会编造价格。</p>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>ANT Spread Board · MIT License · Kiroween 2026 · DYOR,非投资建议。</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
